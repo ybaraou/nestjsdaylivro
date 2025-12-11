@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebSocket Test</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <h1>WebSocket Test</h1>
+  <div id="status">Disconnected</div>
+  <button onclick="connect()">Connect</button>
+  <button onclick="identify()">Send Identify</button>
+  <button onclick="joinRoom()">Join Room order.123</button>
+  <hr>
+  <h3>Logs:</h3>
+  <pre id="logs"></pre>
+
+  <script>
+    let socket;
+
+    function log(msg) {
+      const logs = document.getElementById('logs');
+      logs.textContent += new Date().toLocaleTimeString() + ' - ' + msg + '\n';
+      console.log(msg);
+    }
+
+    function connect() {
+      socket = io('http://localhost:5000', {
+        transports: ['websocket']
+      });
+
+      socket.on('connect', () => {
+        document.getElementById('status').textContent = 'Connected: ' + socket.id;
+        log('Connected with socket ID: ' + socket.id);
+      });
+
+      socket.on('disconnect', () => {
+        document.getElementById('status').textContent = 'Disconnected';
+        log('Disconnected');
+      });
+
+      socket.on('identified', (data) => {
+        log('Received "identified" event: ' + JSON.stringify(data));
+      });
+
+      socket.on('room-joined', (data) => {
+        log('Received "room-joined" event: ' + JSON.stringify(data));
+      });
+
+      socket.on('order.status.updated', (data) => {
+        log('Received "order.status.updated": ' + JSON.stringify(data));
+      });
+    }
+
+    function identify() {
+      if (!socket || !socket.connected) {
+        log('Not connected!');
+        return;
+      }
+
+      const payload = {
+        user: {
+          id: 1,
+          name: 'John Doe',
+          email: 'john@example.com',
+          type: 'client'
+        }
+      };
+
+      log('Sending "identify" event with: ' + JSON.stringify(payload));
+      
+      socket.emit('identify', payload, (response) => {
+        log('Identify response (ack): ' + JSON.stringify(response));
+      });
+    }
+
+    function joinRoom() {
+      if (!socket || !socket.connected) {
+        log('Not connected!');
+        return;
+      }
+
+      socket.emit('join', { room: 'order.123' }, (response) => {
+        log('Join response (ack): ' + JSON.stringify(response));
+      });
+    }
+  </script>
+</body>
+</html>
