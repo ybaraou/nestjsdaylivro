@@ -30,6 +30,9 @@ export interface ConnectionInfo {
   cors: {
     origin: '*', // TODO: Restreindre en production
   },
+  transports: ['websocket', 'polling'], // websocket en priorité
+  pingInterval: 25000, // maintien connexion
+  pingTimeout: 60000,
 })
 export class WebsocketGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -145,7 +148,12 @@ export class WebsocketGateway
   }
 
   // Obtenir le nombre de connexions par type
-  getConnectionsCount(): { total: number; clients: number; drivers: number; admins: number } {
+  getConnectionsCount(): {
+    total: number;
+    clients: number;
+    drivers: number;
+    admins: number;
+  } {
     const all = Array.from(this.connections.values());
     return {
       total: all.length,

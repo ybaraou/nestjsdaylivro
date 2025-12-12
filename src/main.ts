@@ -34,6 +34,6 @@ async function bootstrap() {
   );
   app.setGlobalPrefix('api/v1');
   setupSwagger(app);
-  await app.listen(configService.get<number>('port', 5000));
+  await app.listen(process.env.PORT || 3000, '0.0.0.0');
 }
 bootstrap();
