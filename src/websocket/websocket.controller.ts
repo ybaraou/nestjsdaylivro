@@ -1,13 +1,28 @@
 import { Controller, Post, Body, Get, Query, Logger, BadRequestException } from '@nestjs/common';
+import { IsString, IsOptional, IsNotEmpty, IsArray } from 'class-validator';
 import { WebsocketGateway } from './websocket.gateway';
 
 // DTO pour l'émission d'events
 class EmitDto {
+  @IsOptional()
+  @IsString()
   room?: string;
+
+  @IsNotEmpty()
+  @IsString()
   event: string;
+
+  @IsNotEmpty()
   data: any;
+
+  @IsOptional()
   orderId?: string | number;
+
+  @IsOptional()
   driverId?: string | number;
+
+  @IsOptional()
+  @IsArray()
   targetIds?: (string | number)[]; // IDs spécifiques à notifier
 }
 
