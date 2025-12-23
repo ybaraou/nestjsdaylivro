@@ -100,7 +100,14 @@ export class WebsocketController {
       if (driverId) return `driver-${driverId}`;
     }
 
+    // IMPORTANT: driver.location doit être envoyé à la room de la commande
+    // pour que le client puisse suivre le livreur en temps réel
     if (body.event === 'driver.location') {
+      const orderId = body.data.orderId || body.data.order_id;
+      if (orderId) {
+        return `order-${orderId}`;
+      }
+      // Fallback: si pas d'orderId, envoyer à une room générale (ne devrait pas arriver)
       return 'driver-locations';
     }
 

@@ -8,7 +8,9 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 
 // Types pour les utilisateurs connectés
 export interface ConnectedUser {
@@ -34,6 +36,7 @@ export interface ConnectionInfo {
   pingInterval: 25000, // maintien connexion
   pingTimeout: 60000,
 })
+@Injectable()
 export class WebsocketGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -44,6 +47,8 @@ export class WebsocketGateway
 
   // Map des connexions identifiées: socketId -> ConnectionInfo
   private connections: Map<string, ConnectionInfo> = new Map();
+
+  constructor(private readonly httpService: HttpService) {}
 
   // Connexion d'un client
   handleConnection(client: Socket) {
@@ -161,5 +166,72 @@ export class WebsocketGateway
       drivers: all.filter((c) => c.user.type === 'driver').length,
       admins: all.filter((c) => c.user.type === 'admin').length,
     };
+  }
+
+  /**
+   * Gérer les positions GPS des livreurs
+   * Broadcast temps réel + sauvegarde DB via webhook Laravel
+   */
+  @SubscribeMessage('driver.location')
+  async handleDriverLocation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      orderId: string | number;
+      driverId: string | number;
+      latitude: number;
+      longitude: number;
+    },
+  ) {
+    try {
+      const { orderId, driverId, latitude, longitude } = data;
+
+      this.logger.log(
+        `[GPS] Driver ${driverId} position: ${latitude}, ${longitude} (Order: ${orderId})`,
+      );
+
+      // 1. Broadcast temps réel à la room de la commande (prioritaire)
+      const room = `order-${orderId}`;
+      this.server.to(room).emit('driver.location', {
+        orderId,
+        driverId,
+        latitude,
+        longitude,
+        timestamp: new Date().toISOString(),
+      });
+
+      // 2. Webhook vers Laravel pour sauvegarder en DB (async, non-bloquant)
+      firstValueFrom(
+        this.httpService.post(
+          'https://app.daylivro.com/api/v1/gateway/webhooks/driver-location',
+          {
+            driver_id: driverId,
+            order_id: orderId,
+            latitude,
+            longitude,
+          },
+          {
+            timeout: 3000, // 3 secondes max
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Webhook-Source': 'nestjs-gateway',
+            },
+          },
+        ),
+      )
+        .then(() => {
+          this.logger.debug(`[GPS] Position saved to Laravel for driver ${driverId}`);
+        })
+        .catch((error) => {
+          // Silent fail - le broadcast temps réel est déjà fait
+          this.logger.warn(
+            `[GPS] Failed to save position to Laravel: ${error.message}`,
+          );
+        });
+
+      return { success: true, room };
+    } catch (error) {
+      this.logger.error('[GPS] Error handling driver location:', error);
+      return { success: false, error: error.message };
+    }
   }
 }
